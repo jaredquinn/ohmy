@@ -1,5 +1,5 @@
 
-Python wrapper for MySQLdb to make it bareably while still being lightweight and flexible.
+Python wrapper for MySQLdb to make it bareable while still being lightweight and flexible.
 
 
 This is a work in progress;   I became frustrated with MySQLdb and began wrapping it's
