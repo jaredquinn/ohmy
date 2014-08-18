@@ -10,3 +10,5 @@ Better error checking needs to be implemented and more useful results and except
 Feel free to fork it and make it more complete if you find it useful!
 
 
+Please see ohmy.py for usage instructions
+
