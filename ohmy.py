@@ -410,10 +410,13 @@ class MySQLTable(object):
 	
 	def get(self, pkey):
 		" Convenience method to return a MySQLRecord matching the PKEY value "
-		res = self.select( where=["`%s` = %s" % ( self.__PKEY, pkey ) ])
-		v = res[0]
-		print v
-		return v
+		tr = self.create()
+		tr.setField( self.__PKEY, pkey )
+		kf = tr.getField( self.__PKEY, MySQLType.Representation.MYSQL )
+		
+		res = self.select( where=["`%s` = %s" % ( self.__PKEY, kf ) ])
+		if len(res) == 1:
+			return res[0]
 
 
 	def save(self, record):
