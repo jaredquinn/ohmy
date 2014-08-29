@@ -131,6 +131,7 @@ class MySQLRecord(object):
 
 
 	def _determineDataRepresentation(self, datarep = None):
+		print datarep
 		if datarep == None: datarep = MySQLType.Representation.INTERNAL
 		if datarep == MySQLType.Representation.INTERNAL or \
 		   datarep == MySQLType.Representation.MYSQL or \
@@ -166,7 +167,7 @@ class MySQLRecord(object):
 		raise TypeError('Unknown Field Type %s' % self.__dict__['__META'][field]['Type'])
 
 
-	def getField(self, field, datarep=None):
+	def getField(self, field, datarep=None, value=None):
 		""" Base getField Interface allowing any required data transforms
 
 		    field (str) - Name of Field to Retrieve
@@ -175,6 +176,8 @@ class MySQLRecord(object):
 		datarep = self._determineDataRepresentation(datarep)
 		if field in self.__dict__['__FIELDS']:
 			val = self.__dict__['__DATA'][field] 
+			if value != None:
+				val = value
 			if datarep == MySQLType.Representation.MYSQL: val = self._mysqlFieldFormatter( field, val )
 			if datarep == MySQLType.Representation.EXTERNAL: val = self._externalFieldFormatter( field, val )
 			return val
@@ -246,8 +249,10 @@ class MySQLRecord(object):
 		""" Write the record back to the database
 		"""
 		if self.__dict__['__INDEX'] == None:
+			print 'Doing an INSERT?'
 			return self.__dict__['__TABLE'].insert(self)
 		else:
+			print 'Doing an UPDATE?'
 			return self.__dict__['__TABLE'].save(self)
 
 
@@ -400,23 +405,29 @@ class MySQLTable(object):
 
 	def _check_result(self, cur):
 		if cur.rowcount != 1:
-			raise MySQLException('Expected to Update only 1 row but updated %d', cur.rowcount)
+			raise MySQLException('Expected to Update only 1 row but updated %s' % cur.rowcount)
 
 	
 	def get(self, pkey):
 		" Convenience method to return a MySQLRecord matching the PKEY value "
 		res = self.select( where=["`%s` = %s" % ( self.__PKEY, pkey ) ])
-		if len(res) == 1:
-			return res[0]
+		v = res[0]
+		print v
+		return v
 
-		else:
-			raise MySQLException('get returned more than one document!')
 
 	def save(self, record):
 		" Convenience method to run an update again the changed fields of the current record "
+		print 'Here to save'
+		print record
+		print record.Id
 		values = record.changes( MySQLType.Representation.MYSQL )
-		kf = record.getField( self.__PKEY, MySQLType.Representation.MySQL )
-		return self.update( values, where=[ "`%s`=%s" % ( self.__PKEY, kf ) ] )
+		print 'Values %s' % values
+		kf = record.getField( self.__PKEY, datarep=MySQLType.Representation.MySQL, value=None )
+		print 'Get Field %s' % kf
+		up = self.update( values, where=[ "`%s`=%s" % ( self.__PKEY, kf ) ] )
+		print 'Got Up %s' % up
+		return up
 
 
 
@@ -464,8 +475,8 @@ class MySQLTable(object):
 		)
 		cur = self._execute( statement, commit = True )
 		self._check_result( cur )
+		return cur
 
-		return self.get( record.getField( self.__PKEY, MySQLType.Representation.MYSQL ) )
 
 
 class MySQLException(MySQLdb.Error):
