@@ -131,7 +131,6 @@ class MySQLRecord(object):
 
 
 	def _determineDataRepresentation(self, datarep = None):
-		print datarep
 		if datarep == None: datarep = MySQLType.Representation.INTERNAL
 		if datarep == MySQLType.Representation.INTERNAL or \
 		   datarep == MySQLType.Representation.MYSQL or \
@@ -249,10 +248,8 @@ class MySQLRecord(object):
 		""" Write the record back to the database
 		"""
 		if self.__dict__['__INDEX'] == None:
-			print 'Doing an INSERT?'
 			return self.__dict__['__TABLE'].insert(self)
 		else:
-			print 'Doing an UPDATE?'
 			return self.__dict__['__TABLE'].save(self)
 
 
@@ -383,19 +380,8 @@ class MySQLTable(object):
 
 	def _execute(self, statement, commit=False):
 		cur = self.__db.connection().cursor()
-		#print "Executing %s" % statement
 		LOGGER.debug('Executing %s' % statement)
 		res = cur.execute(statement)
-
-		#print "Desc" 
-		#print cur.description
-		#print "Flag"
-		#print cur.description_flags
-		#print "Rowcount %s" % cur.rowcount
-		#print "ArraySize %s" % cur.arraysize
-		#print "LastRowID %s" % cur.lastrowid
-		#print "Messages %s" % cur.messages
-		#print "RowNumber %s" % cur.rownumber
 
 		if commit:
 			LOGGER.debug('Commiting Transaction')
@@ -410,26 +396,22 @@ class MySQLTable(object):
 	
 	def get(self, pkey):
 		" Convenience method to return a MySQLRecord matching the PKEY value "
-		tr = self.create()
-		tr.setField( self.__PKEY, pkey )
-		kf = tr.getField( self.__PKEY, MySQLType.Representation.MYSQL )
+		tr=self.create()
+		pkey=tr.getField( self.__PKEY, datarep=MySQLType.Representation.MYSQL, value=pkey )
 		
-		res = self.select( where=["`%s` = %s" % ( self.__PKEY, kf ) ])
+		res = self.select( where=["`%s` = %s" % ( self.__PKEY, pkey ) ])
+
 		if len(res) == 1:
 			return res[0]
+
+		raise MySQLException('ID Mismatch')
 
 
 	def save(self, record):
 		" Convenience method to run an update again the changed fields of the current record "
-		print 'Here to save'
-		print record
-		print record.Id
 		values = record.changes( MySQLType.Representation.MYSQL )
-		print 'Values %s' % values
 		kf = record.getField( self.__PKEY, datarep=MySQLType.Representation.MySQL, value=None )
-		print 'Get Field %s' % kf
 		up = self.update( values, where=[ "`%s`=%s" % ( self.__PKEY, kf ) ] )
-		print 'Got Up %s' % up
 		return up
 
 
