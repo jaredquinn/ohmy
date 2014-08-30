@@ -157,10 +157,10 @@ class MySQLRecord(object):
 		ftype = self.__dict__['__META'][field]['DataType'] 
 		if value == None: return 'NULL'
 
-		if ftype == MySQLType.Field.BINARY:		return "x'%s'" % binascii.hexlify(value)
+		if ftype == MySQLType.Field.BINARY:	return "x'%s'" % binascii.hexlify(value)
 		if ftype == MySQLType.Field.DATETIME: 	return "'%s'" % value.strftime('%Y-%m-%d %H:%M:%S')
 		if ftype == MySQLType.Field.STRING:     return "'%s'" % value
-		if ftype == MySQLType.Field.INTEGER:   	return "%i" % value
+		if ftype == MySQLType.Field.INTEGER:   	return int(value)
 		if ftype == MySQLType.Field.FLOAT:   	return "%f" % value
 
 		raise TypeError('Unknown Field Type %s' % self.__dict__['__META'][field]['Type'])
@@ -181,7 +181,7 @@ class MySQLRecord(object):
 			if datarep == MySQLType.Representation.EXTERNAL: val = self._externalFieldFormatter( field, val )
 			return val
 		else:
-			raise AttributeException('Field %s is not defined' % field)
+			raise MySQLException('Field %s is not defined' % field)
 
 
 	def setField(self, field, value):
@@ -204,7 +204,9 @@ class MySQLRecord(object):
 				value = dateutil.parser.parse(value)
 
 		if ftype == MySQLType.Field.BINARY and value != None:
-			if isinstance(value, uuid.UUID): value = value.bytes
+			if not isinstance(value, bytes):
+				if isinstance(value, str): value = uuid.UUID(value).bytes
+				elif isinstance(value, uuid.UUID): value = value.bytes
 
 		if field in self.__dict__['__FIELDS']:
 			""" Validation of Data should occur here """
@@ -293,7 +295,7 @@ class MySQLTable(object):
 		if re.search('^datetime', ftype) != None: return MySQLType.Field.DATETIME
 		if re.search('^(smallint|int|tinyint|mediumint|bigint)', ftype) != None: return MySQLType.Field.INTEGER
 		if re.search('^(number|decimal|float|double)', ftype) != None: return MySQLType.Field.FLOAT
-		if re.search('^(blob|varchar|string)', ftype) != None: return MySQLType.Field.STRING
+		if re.search('^(text|blob|varchar|string)', ftype) != None: return MySQLType.Field.STRING
 		return 0
 
 
@@ -309,9 +311,18 @@ class MySQLTable(object):
 
 
 	def _whereString(self, data=None):
-		if data == None: return ""
-		whereStr = ",".join(data)
-		return "WHERE %s" % whereStr
+		whereStr = ""
+
+		if isinstance(data, list) or isinstance(data, tuple):
+			whereStr = 'WHERE %s' % ",".join(data)
+		elif isinstance(data, str):
+			whereStr = 'WHERE %s' % data
+		elif data == None:
+			whereStr = ''
+		else:
+			raise MySQLException('What do I do with %s' % str(type(data)))
+
+		return whereStr
 
 
 	def _orderString(self, data):
@@ -378,10 +389,15 @@ class MySQLTable(object):
 	def _fetchall(self, cur):
 		return cur.fetchall()
 
-	def _execute(self, statement, commit=False):
+	def _execute(self, statement, commit=False, insert=False):
 		cur = self.__db.connection().cursor()
 		LOGGER.debug('Executing %s' % statement)
 		res = cur.execute(statement)
+
+		if insert:
+			pkey = cur.lastrowid
+			self.__INDEX = pkey
+			LOGGER.debug('Setting Transaction ID Field %s=%s' % ( self.__PKEY, pkey ))
 
 		if commit:
 			LOGGER.debug('Commiting Transaction')
@@ -394,12 +410,14 @@ class MySQLTable(object):
 			raise MySQLException('Expected to Update only 1 row but updated %s' % cur.rowcount)
 
 	
-	def get(self, pkey):
+	def get(self, pkey, key=None):
 		" Convenience method to return a MySQLRecord matching the PKEY value "
+		if not key: key=self.__PKEY
+
 		tr=self.create()
-		pkey=tr.getField( self.__PKEY, datarep=MySQLType.Representation.MYSQL, value=pkey )
+		pkey=tr.getField( key, datarep=MySQLType.Representation.MYSQL, value=pkey )
 		
-		res = self.select( where=["`%s` = %s" % ( self.__PKEY, pkey ) ])
+		res = self.select( where=["`%s` = %s" % ( key, pkey ) ])
 
 		if len(res) == 1:
 			return res[0]
@@ -410,10 +428,9 @@ class MySQLTable(object):
 	def save(self, record):
 		" Convenience method to run an update again the changed fields of the current record "
 		values = record.changes( MySQLType.Representation.MYSQL )
-		kf = record.getField( self.__PKEY, datarep=MySQLType.Representation.MySQL, value=None )
-		up = self.update( values, where=[ "`%s`=%s" % ( self.__PKEY, kf ) ] )
+		kf = record.getField( self.__PKEY, datarep=MySQLType.Representation.MYSQL, value=None )
+		up = self.update( values, conditions=[ "`%s`=%s" % ( self.__PKEY, kf ) ] )
 		return up
-
 
 
 	def select(self, fields=None, where=None, order=None, group=None, limit=None ):
@@ -434,6 +451,7 @@ class MySQLTable(object):
 
 
 	def insert(self, data=None):
+		LOGGER.debug('Is INSERT')
 
 		if isinstance(data, dict): record = self.create(dict)
 		if isinstance(data, MySQLRecord): record = data
@@ -446,9 +464,12 @@ class MySQLTable(object):
 				self._dataString( data ) 
 		)
 
-		cur = self._execute( statement, commit = True )
+		LOGGER.debug('Statement %s' % statement)
+		cur = self._execute( statement, commit = True, insert=True )
 		self._check_result( cur )
-		rec = self.get( record.getField( self.__PKEY, MySQLType.Representation.MYSQL ) )
+
+		record.setField( self.__PKEY, self.__INDEX )
+		rec = self.get( record.getField( self.__PKEY ) )
 		return rec
 
 	def update(self, values, conditions):
