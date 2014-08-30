@@ -206,6 +206,7 @@ class MySQLRecord(object):
 		if ftype == MySQLType.Field.BINARY and value != None:
 			if not isinstance(value, bytes):
 				if isinstance(value, str): value = uuid.UUID(value).bytes
+				elif isinstance(value, int): value = bin(value)
 				elif isinstance(value, uuid.UUID): value = value.bytes
 
 		if field in self.__dict__['__FIELDS']:
@@ -289,6 +290,7 @@ class MySQLTable(object):
 				'Default': row[4],
 				'Extra': row[5]
 			}
+		cur.close()
 
 	def _getInternalFieldType( self, ftype ):
 		if re.search('^binary', ftype) != None: return MySQLType.Field.BINARY
@@ -387,9 +389,11 @@ class MySQLTable(object):
 			
 
 	def _fetchall(self, cur):
-		return cur.fetchall()
+		v = cur.fetchall()
+		cur.close()
+		return v
 
-	def _execute(self, statement, commit=False, insert=False):
+	def _execute(self, statement, insert=False):
 		cur = self.__db.connection().cursor()
 		LOGGER.debug('Executing %s' % statement)
 		res = cur.execute(statement)
@@ -399,10 +403,6 @@ class MySQLTable(object):
 			self.__INDEX = pkey
 			LOGGER.debug('Setting Transaction ID Field %s=%s' % ( self.__PKEY, pkey ))
 
-		if commit:
-			LOGGER.debug('Commiting Transaction')
-			com = self.__db.connection().commit()
-		
 		return cur
 
 	def _check_result(self, cur):
@@ -410,7 +410,7 @@ class MySQLTable(object):
 			raise MySQLException('Expected to Update only 1 row but updated %s' % cur.rowcount)
 
 	
-	def get(self, pkey, key=None):
+	def get(self, pkey, key=None, createIfNone=False, failIfNone=True):
 		" Convenience method to return a MySQLRecord matching the PKEY value "
 		if not key: key=self.__PKEY
 
@@ -422,7 +422,13 @@ class MySQLTable(object):
 		if len(res) == 1:
 			return res[0]
 
-		raise MySQLException('ID Mismatch')
+		if createIfNone:
+			return self.create()
+
+		if failIfNone:
+			raise MySQLException('ID Mismatch')
+
+		return None
 
 
 	def save(self, record):
@@ -446,7 +452,8 @@ class MySQLTable(object):
 		)
 
 		res = self._fetchall( self._execute(statement) )
-		return self._mapResultToRecordSet(fields, res)
+		val = self._mapResultToRecordSet(fields, res)
+		return val
 
 
 
@@ -465,8 +472,9 @@ class MySQLTable(object):
 		)
 
 		LOGGER.debug('Statement %s' % statement)
-		cur = self._execute( statement, commit = True, insert=True )
+		cur = self._execute( statement, insert=True )
 		self._check_result( cur )
+		cur.close()
 
 		record.setField( self.__PKEY, self.__INDEX )
 		rec = self.get( record.getField( self.__PKEY ) )
@@ -479,9 +487,10 @@ class MySQLTable(object):
 				self._setString( values ), 
 				self._whereString( conditions )
 		)
-		cur = self._execute( statement, commit = True )
+		cur = self._execute( statement )
 		self._check_result( cur )
-		return cur
+
+		return True
 
 
 
@@ -508,6 +517,8 @@ class MySQLDatabase(object):
 	def connect(self):
 		self.__conn = MySQLdb.connect(self.__host, self.__username, 
 									  self.__password, self.__database)
+		self.__conn.autocommit(True)
+
 		if self.__conn == None:
 			raise MySQLException('connect() failed')
 
