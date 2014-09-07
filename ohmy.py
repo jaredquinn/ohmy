@@ -159,7 +159,7 @@ class MySQLRecord(object):
 
 		if ftype == MySQLType.Field.BINARY:	return "x'%s'" % binascii.hexlify(value)
 		if ftype == MySQLType.Field.DATETIME: 	return "'%s'" % value.strftime('%Y-%m-%d %H:%M:%S')
-		if ftype == MySQLType.Field.STRING:     return "'%s'" % value
+		if ftype == MySQLType.Field.STRING:     return "'%s'" % value.replace("'", "\\\'")
 		if ftype == MySQLType.Field.INTEGER:   	return int(value)
 		if ftype == MySQLType.Field.FLOAT:   	return "%f" % value
 
