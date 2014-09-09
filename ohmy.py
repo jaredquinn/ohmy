@@ -276,6 +276,7 @@ class MySQLTable(object):
 		if self.__db == None:
 			raise MySQLException('No Database Connection')
 
+		self.__db.checkConnection()
 		cur = self.__db.connection().cursor()
 		cur.execute('DESCRIBE `%s`' % tablename)
 		res = cur.fetchall()
@@ -394,6 +395,7 @@ class MySQLTable(object):
 		return v
 
 	def _execute(self, statement, insert=False):
+		self.__db.checkConnection()
 		cur = self.__db.connection().cursor()
 		LOGGER.debug('Executing %s' % statement)
 		res = cur.execute(statement)
@@ -511,12 +513,26 @@ class MySQLDatabase(object):
 		self.__password = password
 		self.__host = host
 		self.__database = database
+		self.__status = 0
 
 		self.__conn = None
 
+	def checkConnection(self):
+		if self.__conn == None:  self.connect()
+		cur = self.connection().cursor()
+		try:
+			cur.execute('SELECT 1')
+			self.__status = True
+		except MySQLdb.OperationalError as e:
+			if e[0] == 2006:
+				self.__status = False
+				self.__conn = None
+				self.connect()
+			else:
+				raise
+		
 	def connect(self):
-		self.__conn = MySQLdb.connect(self.__host, self.__username, 
-									  self.__password, self.__database)
+		self.__conn = MySQLdb.connect(self.__host, self.__username, self.__password, self.__database)
 		self.__conn.autocommit(True)
 
 		if self.__conn == None:
