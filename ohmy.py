@@ -532,7 +532,8 @@ class MySQLDatabase(object):
 				raise
 		
 	def connect(self):
-		self.__conn = MySQLdb.connect(self.__host, self.__username, self.__password, self.__database)
+		self.__conn = MySQLdb.connect(self.__host, self.__username, self.__password, self.__database, charset='utf8', use_unicode=True)
+		
 		self.__conn.autocommit(True)
 
 		if self.__conn == None:
