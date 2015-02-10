@@ -489,6 +489,7 @@ class MySQLTable(object):
 				self._setString( values ), 
 				self._whereString( conditions )
 		)
+		LOGGER.debug('Statement %s' % statement)
 		cur = self._execute( statement )
 		self._check_result( cur )
 
