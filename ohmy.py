@@ -298,7 +298,7 @@ class MySQLTable(object):
 		if re.search('^datetime', ftype) != None: return MySQLType.Field.DATETIME
 		if re.search('^(smallint|int|tinyint|mediumint|bigint)', ftype) != None: return MySQLType.Field.INTEGER
 		if re.search('^(number|decimal|float|double)', ftype) != None: return MySQLType.Field.FLOAT
-		if re.search('^(text|blob|varchar|string)', ftype) != None: return MySQLType.Field.STRING
+		if re.search('^(text|char|blob|varchar|string)', ftype) != None: return MySQLType.Field.STRING
 		return 0
 
 
@@ -312,6 +312,11 @@ class MySQLTable(object):
 	def _setString(self, data= None):
 		return ",".join( map(lambda v: '`%s` = %s' % ( v, data[v] ), data.keys() ) )
 
+	def _joinString(self, string):
+		joinString = ''
+		if string != None:
+			joinString = string	
+		return string
 
 	def _whereString(self, data=None):
 		whereStr = ""
@@ -441,12 +446,13 @@ class MySQLTable(object):
 		return up
 
 
-	def select(self, fields=None, where=None, order=None, group=None, limit=None ):
+	def select(self, fields=None, where=None, order=None, group=None, join=None, limit=None ):
 		if fields == None: fields = self.__FIELDS
 
-		statement = 'SELECT %s FROM `%s` %s %s %s %s;' % ( 
+		statement = 'SELECT %s FROM `%s` %s %s %s %s %s;' % ( 
 				self._fieldString( fields ),
 				self.__TABLENAME, 
+				self._joinString( join ),
 				self._whereString( where ),
 				self._orderString( order ),
 				self._groupString( group ),
@@ -491,7 +497,7 @@ class MySQLTable(object):
 		)
 		LOGGER.debug('Statement %s' % statement)
 		cur = self._execute( statement )
-		self._check_result( cur )
+		#self._check_result( cur )
 
 		return True
 
